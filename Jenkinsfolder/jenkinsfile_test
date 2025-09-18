@@ -1,0 +1,65 @@
+pipeline {
+    agent any
+    environment {
+        PYTHON_SCRIPT = "python_scripts/testing/jenkins_py_integration.py" // Path to your Python script
+    }
+
+    parameters {
+        choice(
+            name: 'Execution_Type', 
+            choices: ['Hard_Start', 'Schedule_Start'], 
+            description: 'Execution type'
+        )
+        string(
+            name: 'Raw_Start_Date', 
+            defaultValue: new Date().format('yyyy-MM-dd') + 'T09:00:00', 
+            description: 'Start date and time for raw data insertion (format: YYYY-MM-DDTHH:mm:ss)'
+        )
+        string(
+            name: 'Raw_End_Date', 
+            defaultValue: new Date().format('yyyy-MM-dd') + 'T15:30:00', 
+            description: 'End date and time for raw data insertion (format: YYYY-MM-DDTHH:mm:ss)'
+        )
+        string(
+            name: 'Start_Index_1min', 
+            defaultValue: '0', 
+            description: 'Start stock index for 1-minute data'
+        )
+        string(
+            name: 'Stop_Index_1min', 
+            defaultValue: '0', 
+            description: 'Stop stock index for 1-minute data: Enter 0 for the complete set'
+        )
+
+        choice(
+            name: 'Hibernation_Req', 
+            choices: ['Yes', 'No'], 
+            description: 'Hibernation Required'
+        )
+    }
+
+    stages {
+        /*stage('Clone Repository') {
+            steps {
+                // Clone the repository to access the Python script
+                git branch: 'main', url: 'https://github.com/elanuktrader/equismart.git'
+            }
+        }*/
+        stage('Run Python Script') {
+            steps {
+                script {
+                    // Run the Python script with the user inputs
+                    sh """
+                        python ${PYTHON_SCRIPT} \
+                            --Execution_Type '${params.Execution_Type}' \
+                            --Raw_Start_Date '${params.Raw_Start_Date}' \
+                            --Raw_End_Date '${params.Raw_End_Date}' \
+                            --Start_Index_1min '${params.Start_Index_1min}' \
+                            --Stop_Index_1min '${params.Stop_Index_1min}'\
+                            --Hibernation_Req '${params.Hibernation_Req}'
+                    """
+                }
+            }
+        }
+    }
+}

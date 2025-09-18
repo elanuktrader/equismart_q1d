@@ -1,0 +1,173 @@
+def rawStartDate = new Date().format('yyyy-MM-dd') + 'T09:00:00'
+def rawEndDate = new Date().format('yyyy-MM-dd') + 'T15:30:00'
+def hibernationReq = 'Yes'
+def Initiate_feat_comp = 'Yes'
+def stock_list = 'Default' 
+pipeline {
+    agent any
+    environment {
+        PYTHON_SCRIPT_ETL = "python_scripts.production.daily_data_insertion" // Path to the data ETL functionality  
+        PYTHON_SCRIPT_feature = "python_scripts.production.feature_computation_driver" // Path to Feature computation driver Python script
+        
+    }
+
+    stages {
+        stage('Run Data ETL functionality') {
+            steps {
+                script {
+                    // Set default values for the script
+                    def executionType = 'Schedule_Start'
+                    def startIndex1min = 0
+                    def stopIndex1min = 0
+                    if(Initiate_feat_comp == 'Yes'){
+                        Hibernation_req_local = 'No'
+
+                    }
+                    else{
+                        Hibernation_req_local = hibernationReq
+
+                    }
+
+                    // Log parameter values for debugging
+                    echo "Execution Type: ${executionType}"
+                    echo "Raw Start Date: ${rawStartDate}"
+                    echo "Raw End Date: ${rawEndDate}"
+                    echo "Start Index (1min): ${startIndex1min}"
+                    echo "Stop Index (1min): ${stopIndex1min}"
+                    echo "Hibernation Required after ETL operation: ${Hibernation_req_local}"
+
+                    // Execute Python script
+                    def status = sh(returnStatus: true, script: """
+                        python -m ${PYTHON_SCRIPT_ETL} \
+                            --Execution_Type '${executionType}' \
+                            --Raw_Start_Date '${rawStartDate}' \
+                            --Raw_End_Date '${rawEndDate}' \
+                            --Start_Index_1min '${startIndex1min}' \
+                            --Stop_Index_1min '${stopIndex1min}' \
+                            --Hibernation_Req '${Hibernation_req_local}'
+                    """)
+
+                    // Check if the script executed successfully
+                    if (status != 0) {
+                        error "Python script execution failed with status code ${status}"
+                    }
+                    else{
+                        echo "Stock Data ETL execution successful"
+
+                    }
+                }
+            }
+        }
+    stage('Run Cash market feature computation') {
+
+            when {
+                expression { Initiate_feat_comp == 'Yes' }
+            }
+            steps {
+                script {
+                    // Set default values for the script
+
+                    def Hibernation_req_local = 'No'
+                    stock_list = 'Default'
+                    def DB_update_date_local = rawStartDate.split('T')[0]
+                    def mov_avg_local =60
+                    def fetch_hist_data_local = 120
+                    def yaml_path = './config/production_config/cm_feature_computation.yaml'
+                    if(params.stock_list!='Default' && params.stock_list != null && params.stock_list.trim() != ''){
+                            stock_list = params.stock_list?.trim()?.toUpperCase()
+                            echo "Stock List for Feature computation outer location: ${stock_list}"
+                        }
+                    if(params.stock_list == 'Default' || params.stock_list == null || params.stock_list.trim() == ''){
+                            stock_list = 'Default'
+                            echo "Stock List for Feature computation CM: ${stock_list}"
+                        }
+
+
+
+                    // Log parameter values for debugging
+                    echo "Feature computation path: ${yaml_path}"
+                    echo "feature table update from date: ${DB_update_date_local}"
+                    echo "Stock List for Feature computation: ${stock_list}"
+                    echo "Moving Average: ${mov_avg_local}"
+                    echo "Historical Data: ${fetch_hist_data_local}"
+                    echo "Hibernation Required after CM market feature computation: ${Hibernation_req_local}"
+
+
+                    // Execute Python script
+                    def status = sh(returnStatus: true, script: """
+                        python -m ${PYTHON_SCRIPT_feature} \
+                            --yaml_path '${yaml_path}' \
+                            --DB_Insert_date '${DB_update_date_local}' \
+                            --stock_list '${stock_list}' \
+                            --mov_avg '${mov_avg_local}' \
+                            --fetch_hist_data '${fetch_hist_data_local}' \
+                            --Hibernation_Req '${Hibernation_req_local}'
+                    """)
+
+                    // Check if the script executed successfully
+                    if (status != 0) {
+                        error "Cash market feature computation failed with status code ${status}"
+                    }
+                    else{
+                        echo "Cash market feature computation successful"
+
+                    }
+                }
+            }
+        }
+    stage('Run Future Market feature computation') {
+            when {
+                expression { Initiate_feat_comp == 'Yes' }
+            }
+            steps {
+                script {
+                    // Set default values for the script
+                    stock_list = 'Default'
+                    def DB_update_date_local = rawStartDate.split('T')[0]
+                    def mov_avg_local =60
+                    def fetch_hist_data_local = 120
+                    def yaml_path = './config/production_config/fno_feature_computation.yaml'
+                    if(params.stock_list!='Default' && params.stock_list != null && params.stock_list.trim() != ''){
+                            stock_list = params.stock_list?.trim()?.toUpperCase()
+                            echo "Stock List for Feature computation outer location: ${stock_list}"
+                        }
+                    
+                    if(params.stock_list == 'Default' || params.stock_list == null|| params.stock_list.trim() == ''){
+                            stock_list = ''
+                            echo "Stock List for Feature computation fno: ${stock_list}"
+                           
+
+                        }
+                    // Log parameter values for debugging
+                    echo "Feature computation path: ${yaml_path}"
+                    echo "feature table update from date: ${DB_update_date_local}"
+                    echo "Stock List for Feature computation: ${stock_list}"
+                    echo "Moving Average: ${mov_avg_local}"
+                    echo "Historical Data: ${fetch_hist_data_local}"
+                    echo "Hibernation Required after fno feature computation: ${hibernationReq}"
+
+
+                    // Execute Python script
+                    def status = sh(returnStatus: true, script: """
+                        python -m ${PYTHON_SCRIPT_feature} \
+                            --yaml_path '${yaml_path}' \
+                            --DB_Insert_date '${DB_update_date_local}' \
+                            --stock_list '${stock_list}' \
+                            --mov_avg '${mov_avg_local}' \
+                            --fetch_hist_data '${fetch_hist_data_local}' \
+                            --Hibernation_Req '${hibernationReq}'
+                    """)
+
+                    // Check if the script executed successfully
+                    if (status != 0) {
+                        error "Future Market feature computation failed with status code ${status}"
+                    }
+                    else{
+                        echo "FnO market feature computation successful"
+
+                    }
+                }
+            }
+        }
+    }
+}

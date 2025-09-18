@@ -1,0 +1,57 @@
+pipeline {
+    agent any
+    environment {
+        PYTHON_SCRIPT = "python_scripts.production.feature_computation_driver" // Path to your Python script   
+    }
+
+    stages {
+        stage('Run Python Script') {
+            steps {
+                script {
+                    // Set default values for the script
+                    
+                    def DB_update_date = new Date().format('yyyy-MM-dd')
+                    def mov_avg = 60
+                    def fetch_hist_data = 120
+                    def hibernationReq = 'Yes'
+                    def feature_type = 'CM_Feature'
+                
+
+                    if(feature_type == 'CM_Feature'){
+                        yaml_path = './config/production_config/cm_feature_computation.yaml'
+                        def stock_list = 'Default'
+                    }
+                    if(feature_type == 'FnO_Feature'){
+                        yaml_path = './config/production_config/fno_feature_computation.yaml'
+                        def stock_list = ''
+                    }
+
+                    // Log parameter values for debugging
+                    echo "Feature computation path: ${yaml_path}"
+                    echo "feature table update from date: ${DB_update_date}"
+                    echo "Stock List for Feature computation: ${stock_list}"
+                    echo "Moving Average: ${mov_avg}"
+                    echo "Historical Data: ${fetch_hist_data}"
+                    echo "Hibernation Required: ${hibernationReq}"
+
+
+                    // Execute Python script
+                    def status = sh(returnStatus: true, script: """
+                        python -m ${PYTHON_SCRIPT} \
+                            --yaml_path '${yaml_path}' \
+                            --DB_Insert_date '${DB_update_date}' \
+                            --stock_list '${stock_list}' \
+                            --mov_avg '${mov_avg}' \
+                            --fetch_hist_data '${fetch_hist_data}' \
+                            --Hibernation_Req '${hibernationReq}'
+                    """)
+
+                    // Check if the script executed successfully
+                    if (status != 0) {
+                        error "Python script execution failed with status code ${status}"
+                    }
+                }
+            }
+        }
+    }
+}

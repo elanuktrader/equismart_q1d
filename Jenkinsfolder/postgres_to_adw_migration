@@ -1,0 +1,130 @@
+
+def currentDate = new Date().format('yyyy-MM-dd')
+pipeline {
+    agent any
+    environment {
+        PYTHON_SCRIPT = "python_scripts.maintenance.postgres_to_adw_migrate_driver" // Path to your Python script   
+        
+        def stock_list = 'Default'
+    }
+    parameters {
+        
+        string(
+            name: 'DB_update_date', 
+            defaultValue: currentDate, 
+            description: 'Specfic the feature computation Start date (format: YYYY-MM-DD)'
+        )
+        string(
+            name: 'stock_list', 
+            defaultValue: 'Default', 
+            description: 'Leave it as Default to compute features for complete stock list otherwise Enter comma seperated NSE Stock names without spaces for specific set of stocks'
+        )
+        string(
+            name: 'fetch_hist_data', 
+            defaultValue: '120', 
+            description: 'Specify in days historical raw data to be fetched for the Feature computations'
+        )
+        string(
+            name: 'mov_avg', 
+            defaultValue: '60', 
+            description: 'Specify moving average period in days'
+        )
+
+        choice(
+            name: 'Hibernation_Req', 
+            choices: ['No', 'Yes'], 
+            description: 'Hibernation Required'
+        )
+    }
+
+    stages {
+        stage('Run Cash market feature computation') {
+            steps {
+                script {
+                    // Set default values for the script
+                    stock_list = 'Default'
+                    def yaml_path = './config/production_config/cm_feature_computation.yaml'
+                    if(params.stock_list!='Default' && params.stock_list != null && params.stock_list.trim() != ''){
+                            stock_list = params.stock_list?.trim()?.toUpperCase()
+                            echo "Stock List for Feature computation outer location: ${stock_list}"
+                        }
+                    if(params.stock_list == 'Default' || params.stock_list == null || params.stock_list.trim() == ''){
+                            stock_list = 'Default'
+                            echo "Stock List for Feature computation CM: ${stock_list}"
+                        }
+
+
+
+                    // Log parameter values for debugging
+                    echo "Feature computation path: ${yaml_path}"
+                    echo "feature table update from date: ${params.DB_update_date}"
+                    echo "Stock List for Feature computation: ${stock_list}"
+                    echo "Moving Average: ${params.mov_avg}"
+                    echo "Historical Data: ${params.fetch_hist_data}"
+                    echo "Hibernation Required: ${params.Hibernation_Req}"
+
+
+                    // Execute Python script
+                    def status = sh(returnStatus: true, script: """
+                        python -m ${PYTHON_SCRIPT} \
+                            --yaml_path '${yaml_path}' \
+                            --DB_Insert_date '${params.DB_update_date}' \
+                            --stock_list '${stock_list}' \
+                            --mov_avg '${params.mov_avg}' \
+                            --fetch_hist_data '${params.fetch_hist_data}' \
+                            --Hibernation_Req '${params.Hibernation_Req}'
+                    """)
+
+                    // Check if the script executed successfully
+                    if (status != 0) {
+                        error "Cash market feature computation failed with status code ${status}"
+                    }
+                }
+            }
+        }
+    stage('Run Future Market feature computation') {
+            steps {
+                script {
+                    // Set default values for the script
+                    stock_list = 'Default'
+                    def yaml_path = './config/production_config/fno_feature_computation.yaml'
+                    if(params.stock_list!='Default' && params.stock_list != null && params.stock_list.trim() != ''){
+                            stock_list = params.stock_list?.trim()?.toUpperCase()
+                            echo "Stock List for Feature computation outer location: ${stock_list}"
+                        }
+                    
+                    if(params.stock_list == 'Default' || params.stock_list == null|| params.stock_list.trim() == ''){
+                            stock_list = ''
+                            echo "Stock List for Feature computation fno: ${stock_list}"
+                           
+
+                        }
+                    // Log parameter values for debugging
+                    echo "Feature computation path: ${yaml_path}"
+                    echo "feature table update from date: ${params.DB_update_date}"
+                    echo "Stock List for Feature computation: ${stock_list}"
+                    echo "Moving Average: ${params.mov_avg}"
+                    echo "Historical Data: ${params.fetch_hist_data}"
+                    echo "Hibernation Required: ${params.Hibernation_Req}"
+
+
+                    // Execute Python script
+                    def status = sh(returnStatus: true, script: """
+                        python -m ${PYTHON_SCRIPT} \
+                            --yaml_path '${yaml_path}' \
+                            --DB_Insert_date '${params.DB_update_date}' \
+                            --stock_list '${stock_list}' \
+                            --mov_avg '${params.mov_avg}' \
+                            --fetch_hist_data '${params.fetch_hist_data}' \
+                            --Hibernation_Req '${params.Hibernation_Req}'
+                    """)
+
+                    // Check if the script executed successfully
+                    if (status != 0) {
+                        error "Future Market feature computation failed with status code ${status}"
+                    }
+                }
+            }
+        }
+    }
+}

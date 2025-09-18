@@ -1,0 +1,26 @@
+pipeline {
+    agent any
+    environment {
+        PYTHON_SCRIPT = "python_scripts/maintenance/latest_data_available.py" // Path to your Python script
+    }
+    stages {
+        stage('Clone Repository') {
+            steps {
+                // Clone the repository to access the Python script
+                git branch: 'main', url: 'https://github.com/elanuktrader/equismart.git'
+            }
+        }
+        /*stage('Install Dependencies') {
+            steps {
+                // Install dependencies from requirements.txt
+                sh 'pip install -r requirements.txt'
+            }
+        }*/
+        stage('Execute Script') {
+            steps {
+                // Execute the Python script
+                sh "python ${PYTHON_SCRIPT}"
+            }
+        }
+    }
+}
